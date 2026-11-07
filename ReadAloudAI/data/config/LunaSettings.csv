@@ -1,0 +1,3 @@
+fieldID,fieldName,fieldType,defaultValue,secondaryValue,fieldDescription,minValue,maxValue,tab
+readaloudai_header,Read Aloud: AI Voices,Header,AI voices (companion app),,,,,
+readaloudai_intro,About,Text,"The rest of this page comes from the companion app: whether it is running, its engine and its voices. Read Aloud fills it in while the game runs and rebuilds it when anything changes; reopen this menu to see the newest state.",,,,,

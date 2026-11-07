@@ -1,0 +1,11 @@
+# Everything the companion app downloads or creates when it runs (uv, Python, engines,
+# models, settings, logs, voice clips). Players get their own on first start.
+ReadAloudAI/companion/runtime/
+runtime/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Build and test scratch files (build.sh, companion/test.sh)
+.build/

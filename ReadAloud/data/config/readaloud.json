@@ -1,0 +1,78 @@
+{
+	# Read Aloud settings. With LunaLib enabled, most of these can also be changed
+	# in game (F2 on the campaign map > Mod Settings); those values win.
+
+	# Where speech goes:
+	#   "auto"      - AI voices from the companion app if it is running, otherwise the system voice
+	#   "companion" - only the companion app (AI voices); silent if it isn't running
+	# The companion app comes with the optional "Read Aloud: AI Voices" mod (mods/ReadAloudAI).
+	# Enabling that mod needs a game restart; starting, stopping or setting up the app doesn't.
+	#   "system"    - only the operating system's voice (Windows SAPI, macOS say, Linux espeak-ng / spd-say)
+	#   "off"       - nothing is spoken (the button is hidden)
+	"backend":"auto",
+
+	# Port of the companion app on this computer (127.0.0.1). Must match the app's setting.
+	"companionPort":47700,
+
+	# Start the companion app in the background when the game needs it (at the title screen,
+	# when a save loads, and on a read if it isn't running; at most once a minute). Only
+	# happens after you have set the app up once: run companion/start.cmd (Windows) or
+	# companion/start.sh in the Read Aloud: AI Voices mod folder.
+	"companionAutostart":true,
+
+	# Read each new block of dialog text automatically, without pressing the button.
+	"autoRead":false,
+
+	# Also read the list of choices after the text.
+	"readOptions":false,
+
+	# Stop speaking when the dialog closes.
+	"stopOnClose":true,
+
+	# The speaker button.
+	"showButton":true,
+	"buttonSize":22,
+	# "endOfText" - just after the last paragraph; "corner" - bottom right corner of the text area
+	"buttonPlacement":"endOfText",
+
+	# Key that reads the latest text, or stops if already speaking. LWJGL key name
+	# (for example F8, R, GRAVE); "" for no key.
+	"hotkey":"F8",
+
+	# Who reads what (system voice and companion app alike):
+	#   "quotes"    - text in quotation marks in the character's voice (male or female),
+	#                 everything else by the narrator
+	#   "character" - all text in the voice of the person you are talking to
+	#   "single"    - the narrator reads everything
+	"voiceMode":"quotes",
+
+	# System voice ("system" backend, and "auto" without the companion).
+	# rate: -10 (slow) to 10 (fast). volume: 0 to 100.
+	# Voices: exact installed voice names, or "" for automatic: the narrator gets the
+	# default voice, characters an installed voice of their gender (Windows: Settings >
+	# Time & language > Speech). With LunaLib, pick them from lists in the settings menu.
+	"systemRate":0,
+	"systemVolume":100,
+	"systemVoice":"",
+	"systemVoiceMale":"",
+	"systemVoiceFemale":"",
+
+	# Voice pools: each character gets one installed voice of their gender and keeps it
+	# (picked from the character's id, nothing is saved). The voices above are then used
+	# only when the game can't tell who is speaking. The pools hold every usable installed
+	# voice of that gender, or only the names listed here, e.g. ["Microsoft David Desktop",
+	# "Microsoft Mark"]. The companion app has its own pools, set on its page.
+	"systemVoicePools":false,
+	"systemPoolMale":[],
+	"systemPoolFemale":[],
+
+	# Samples played after saving the LunaLib settings: "changed" (voices you changed),
+	# "all" (every voice, each time) or "off".
+	"voicePreview":"changed",
+
+	# Text replacements applied before speaking, for names the voices mispronounce.
+	# Each entry is [regex, replacement]; Java regex syntax, case-sensitive.
+	# Example: ["\\bLuddic\\b", "Luh-dick"]
+	"replacements":[
+	],
+}

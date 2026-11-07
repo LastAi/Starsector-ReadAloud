@@ -1,0 +1,9 @@
+# Keep line endings as the scripts need them, whatever the cloner's git settings.
+* text=auto
+*.sh text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.jar binary
+*.png binary
+*.wav binary
