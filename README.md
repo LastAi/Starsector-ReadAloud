@@ -68,3 +68,13 @@ The code in this repo is under the [MIT License](LICENSE).
   each under its own license, shown on the app's setup page: Kitten TTS (Apache-2.0; the
   kitten-tts-2 model uses the Stellon Labs Community License), F5-TTS (code MIT; the
   pretrained model is **CC-BY-NC, non-commercial**), Chatterbox (MIT).
+
+## A note from the author
+
+Hi, I'm LastAi. I've been a longtime fan of Starsector; it's one of my favorite games.
+However, I'm dyslexic. *Very* dyslexic, and Starsector is a very text-heavy game.
+
+Games like Stellaris are also very text-heavy, and discovering the screen reader option
+in that game changed the way I look at games. I've been thinking about how I might make
+a mod that brings that idea to Starsector, and now I finally have a way to bring it to
+life.
