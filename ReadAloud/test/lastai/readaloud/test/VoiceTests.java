@@ -62,6 +62,70 @@ public final class VoiceTests {
                 show(VoiceParts.split(paras, VoiceParts.MODE_SINGLE, "female", true)), "single reader");
     }
 
+    /** Speech only (requested by Rook999): quotes in the character's voice, narration silent. */
+    public static void speechModeSkipsTheNarrator() {
+        T.eq(Arrays.asList("male:Fine, Go."),
+                show(VoiceParts.split(Arrays.asList("He shrugs. “Fine,” he says, then adds, “Go.”"),
+                        VoiceParts.MODE_SPEECH, "male", true)), "quotes kept and joined, narration dropped");
+        T.eq(Arrays.asList("female:First, the fuel.\n\nThen the crew."),
+                show(VoiceParts.split(Arrays.asList("She sighs. \"First, the fuel.", "\"Then the crew.\" She looks away."),
+                        VoiceParts.MODE_SPEECH, "female", true)), "across paragraphs");
+        T.eq(Collections.<String>emptyList(),
+                show(VoiceParts.split(Arrays.asList("Your fleet approaches.", "The station looms."),
+                        VoiceParts.MODE_SPEECH, "male", false)), "only narration: nothing to read");
+
+        Config c = new Config();
+        c.voiceMode = VoiceParts.MODE_SPEECH;
+        List<VoiceParts.Part> parts = SpeakerButton.buildParts(
+                TextCleaner.paragraphs(Arrays.asList("\"Luddic pilgrims,\" he says")),
+                TextCleaner.choices(Arrays.asList("1. Leave [Esc]")), c, "male", true);
+        T.eq(Arrays.asList("male:Luddic pilgrims,", "narrator:Your choices:", "narrator:Leave."), show(parts),
+                "choices are still read when asked for");
+    }
+
+    static List<String> speech(int pauseMs, String... paragraphs) {
+        return show(VoiceParts.split(Arrays.asList(paragraphs), VoiceParts.MODE_SPEECH, "male", true, pauseMs));
+    }
+
+    /** Speech mode with a pause: skipped narration between quotes becomes one fixed silence. */
+    public static void speechModePausesWhereNarrationWas() {
+        T.eq(Arrays.asList("male:Hello Commander", "(600ms)male:What can I do for you?"),
+                speech(600, "\"Hello Commander\" the station manager's voice comes in over the comms. \"What can I do for you?\""),
+                "the example");
+        T.eq(Collections.singletonList("male:Hello Commander What can I do for you?"),
+                speech(0, "\"Hello Commander\" the voice says. \"What can I do for you?\""), "pause 0: joined as before");
+        T.eq(Arrays.asList("male:A", "(500ms)male:B"),
+                speech(500, "Static. \"A\" he says.", "The line crackles.", "Then: \"B\" Silence."),
+                "narration at start/end: no pause; several narration runs in a row: one pause");
+        T.eq(Collections.singletonList("male:A B"), speech(500, "\"A\" \"B\""), "nothing between the quotes: no pause");
+        T.eq(Collections.singletonList("male:First.\n\nSecond."), speech(500, "\"First.", "\"Second.\""),
+                "a quote over two paragraphs is not interrupted");
+        T.eq(Collections.singletonList("narrator:He nods. \"A\" Then \"B\""),
+                show(VoiceParts.split(Arrays.asList("He nods. \"A\" Then \"B\""), VoiceParts.MODE_SINGLE, "male", true, 500)),
+                "other modes ignore the pause");
+    }
+
+    public static void pauseSettingAndRequest() throws Exception {
+        T.eq(500, new Config().narrationPause, "default");
+        T.eq(1200, Config.fromJson(new JSONObject("{narrationPause:1200}"), null).narrationPause, "from the file");
+        T.eq(Config.MAX_NARRATION_PAUSE, Config.fromJson(new JSONObject("{narrationPause:99999}"), null).narrationPause, "clamped");
+        Config c = new Config();
+        FakeLuna luna = new FakeLuna();
+        luna.v.put("readaloud_narrationPause", 0);
+        c.applyOverrides(luna);
+        T.eq(0, c.narrationPause, "from Luna");
+
+        c.voiceMode = VoiceParts.MODE_SPEECH;
+        c.narrationPause = 700;
+        c.replacements = Collections.singletonList(new Config.Replacement(Pattern.compile("Luddic"), "Luh-dick"));
+        List<VoiceParts.Part> parts = SpeakerButton.buildParts(
+                TextCleaner.paragraphs(Arrays.asList("\"Hi.\" He waves. \"Luddic?\"")), new ArrayList<String>(), c, "male", true);
+        T.eq(Arrays.asList("male:Hi.", "(700ms)male:Luh-dick?"), show(parts), "replacements keep the pause");
+        JSONObject j = new SpeechRequest(parts).toJson();
+        T.no(j.getJSONArray("parts").getJSONObject(0).has("pause"), "no pause field without a pause");
+        T.eq(700, j.getJSONArray("parts").getJSONObject(1).getInt("pause"), "pause in ms for the companion");
+    }
+
     /** What the button sends: voice parts, then each choice as its own narrator part; replacements everywhere. */
     public static void buildPartsAddsChoicesAndReplacements() throws Exception {
         Config c = new Config();
@@ -108,6 +172,12 @@ public final class VoiceTests {
         T.eq("all", c.voicePreview, "preview");
         T.eq("quotes", Config.fromJson(new JSONObject("{voiceMode:'loud'}"), null).voiceMode, "bad mode -> default");
         T.eq("quotes", new Config().voiceMode, "default mode");
+        T.eq("speech", Config.fromJson(new JSONObject("{voiceMode:'speech'}"), null).voiceMode, "speech mode from the file");
+        Config sp = new Config();
+        FakeLuna lunaSpeech = new FakeLuna();
+        lunaSpeech.v.put("readaloud_voiceMode", "speech");
+        sp.applyOverrides(lunaSpeech);
+        T.eq("speech", sp.voiceMode, "speech mode from Luna");
 
         FakeLuna luna = new FakeLuna();
         luna.v.put("readaloud_voiceMode", "single");

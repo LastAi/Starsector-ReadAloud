@@ -179,10 +179,19 @@ def speaker_key(speaker):
 
 
 ROLES = ('narrator', 'male', 'female')
+MAX_PAUSE_MS = 5000
+
+
+def part_pause(p):
+    """Seconds of silence before a part, from its optional "pause" (milliseconds); 0 if absent or bad."""
+    ms = p.get('pause')
+    if isinstance(ms, bool) or not isinstance(ms, (int, float)) or ms != ms or ms <= 0:
+        return 0.0
+    return min(ms, MAX_PAUSE_MS) / 1000.0
 
 
 def request_parts(raw):
-    """[(text, role)] from a request's "parts"; bad entries are skipped, the total is capped at MAX_TEXT."""
+    """[(text, role, pause seconds)] from a request's "parts"; bad entries are skipped, the total is capped at MAX_TEXT."""
     out, left = [], MAX_TEXT
     if not isinstance(raw, list):
         return out
@@ -193,7 +202,7 @@ def request_parts(raw):
         if not t:
             continue
         role = p.get('role') if p.get('role') in ROLES else 'narrator'
-        out.append((t, role))
+        out.append((t, role, part_pause(p)))
         left -= len(t)
     return out
 
@@ -220,11 +229,16 @@ class Speaker:
         return self.speak_parts([(text, voice)])
 
     def speak_parts(self, parts):
-        """parts: [(text, voice)], spoken in order. Only the very first chunk is kept short."""
+        """parts: [(text, voice)] or [(text, voice, pause seconds)], spoken in order, each pause
+        played as silence before its part. Only the very first chunk is kept short."""
         chunks = []
-        for text, voice in parts:
+        for part in parts:
+            text, voice = part[0], part[1]
+            # A pause only between parts: never before the first thing said.
+            pause = part[2] if len(part) > 2 and chunks else 0.0
             first_max = 100 if not chunks else 280
-            chunks.extend((c, voice) for c in split_text(text, first_max=first_max))
+            for i, c in enumerate(split_text(text, first_max=first_max)):
+                chunks.append((c, voice, pause if i == 0 else 0.0))
         with self.lock:
             self.gen += 1
             g = self.gen
@@ -246,14 +260,15 @@ class Speaker:
         while True:
             try:
                 _, path = self.play_q.get_nowait()
-                audio.safe_remove(path)
+                if isinstance(path, str):
+                    audio.safe_remove(path)
             except queue.Empty:
                 return
 
     def _produce(self, g, chunks):
         engine = self.app.engine
         try:
-            for i, (chunk, voice) in enumerate(chunks):
+            for i, (chunk, voice, pause) in enumerate(chunks):
                 if g != self.gen:
                     return
                 out = os.path.join(self.app.paths.tmp, 'speech-%d-%d.wav' % (g, i))
@@ -265,6 +280,8 @@ class Speaker:
                 if g != self.gen:
                     audio.safe_remove(out)
                     return
+                if pause > 0:
+                    self.play_q.put((g, float(pause)))  # silence, played before the clip
                 self.play_q.put((g, out))
         except Exception as e:  # noqa: BLE001
             self.last_error = str(e)
@@ -290,6 +307,13 @@ class Speaker:
         played_gen, clips, seconds = 0, 0, 0.0
         while True:
             g, path = self.play_q.get()
+            if not isinstance(path, str):  # a pause: wait, unless a new request or stop comes in
+                self.playing = g == self.gen
+                end = time.time() + path
+                while self.playing and g == self.gen and time.time() < end:
+                    time.sleep(0.02)
+                self.playing = False
+                continue
             try:
                 if g == self.gen:
                     self.playing = True
@@ -413,15 +437,15 @@ class App:
         parts = request_parts(req.get('parts'))
         if parts:
             # The game decided who reads each part: the narrator (the "default" slot) or a character.
-            spoken = [(t, voice_for(role)) for t, role in parts]
+            spoken = [(t, voice_for(role), pause) if pause else (t, voice_for(role)) for t, role, pause in parts]
         else:  # older mod versions: one text, read in the speaker's voice
             spoken = [(text, voice_for(gender) if gender else pick_voice(es, ''))]
         self.speaker.last_error = ''
         who = speaker.get('name') or ''
-        roles = sorted({r for _, r in parts}) if parts else []
+        roles = sorted({p[1] for p in parts}) if parts else []
         picks = ['%s from the %s pool' % (pool_identity(v if isinstance(v, str) else v.get('ref', '')), g)
                  for g, v in sorted(pooled.items()) if v is not None]
-        self.log('Request: %d characters%s%s%s.' % (sum(len(t) for t, _ in spoken), (' from ' + who) if who else '',
+        self.log('Request: %d characters%s%s%s.' % (sum(len(s[0]) for s in spoken), (' from ' + who) if who else '',
                                                     (' (' + ', '.join(roles) + ')') if len(roles) > 1 else '',
                                                     ('; ' + ', '.join(picks)) if picks else ''))
         return {'ok': True, 'id': self.speaker.speak_parts(spoken)}

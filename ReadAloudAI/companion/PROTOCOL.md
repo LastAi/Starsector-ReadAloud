@@ -43,8 +43,10 @@ Replaces whatever is being spoken. Paragraphs are separated by a blank line.
 `parts` (mod 0.1.0 and later) are spoken in order, each in the voice for its `role`:
 `narrator` uses the engine's Narrator slot (`voices.default` in settings.json),
 `male` / `female` the character slots (falling back to the Narrator). The game decides
-the roles from its "Who reads what" setting (quotes / character / single). Bad
-entries are skipped; an unknown role counts as `narrator`.
+the roles from its "Who reads what" setting (quotes / character / single / speech). Bad
+entries are skipped; an unknown role counts as `narrator`. A part may carry `"pause": 500`
+(milliseconds, mod 0.2.0 and later): silence before that part, capped at 5000, ignored on
+the first part. Apps that don't know the field just leave the pause out.
 
 Without `parts` (older mods), `text` is read in the voice for `speaker.gender`
 (`male`, `female` or `""` for the Narrator slot).

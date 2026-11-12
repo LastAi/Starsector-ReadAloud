@@ -118,6 +118,24 @@ public final class BackendTests {
         T.eq(3, single.size(), "fallback list");
     }
 
+    /** Speech mode's pauses: Start-Sleep on Windows, a "+pause" pair for the sh script elsewhere. */
+    public static void pausesReachEverySystemVoice() {
+        List<VoiceParts.Part> parts = Arrays.asList(new VoiceParts.Part("male", "Hello Commander."),
+                new VoiceParts.Part("male", "What can I do for you?", 500));
+        String win = last(new SystemBackend("windows", 0, 100, "").commands(parts).get(0));
+        T.yes(win.indexOf("Start-Sleep -Milliseconds 500;Say 'male'") > 0, "windows sleeps before the second part: " + win);
+        T.eq(1, win.split("Start-Sleep").length - 1, "only one pause");
+        // One voice, but the pause needs the script (no plain espeak / say shortcut).
+        List<List<String>> linux = new SystemBackend("Linux", 0, 100, "", "", "").commands(parts);
+        T.eq(1, linux.size(), "script, not the fallback list");
+        List<String> c = linux.get(0);
+        T.eq(Arrays.asList("sh", "en+m3", "Hello Commander.", "+pause", "0.500", "en+m3", "What can I do for you?"),
+                c.subList(3, c.size()), "pause pair before the part");
+        List<String> mac = new SystemBackend("Mac OS X", 0, 100, "").commands(parts).get(0);
+        T.eq("sh", mac.get(0), "mac uses the script too");
+        T.eq("1", SystemBackend.seconds(1000), "whole seconds");
+    }
+
     /**
      * Runs the Linux script with a fake espeak-ng (when a POSIX sh is available, e.g. Git Bash),
      * checking each part reaches the program with its voice and text intact.
@@ -132,11 +150,15 @@ public final class BackendTests {
                 + log.getPath().replace('\\', '/') + "'; done; echo >> '" + log.getPath().replace('\\', '/') + "'\n")
                 .getBytes(StandardCharsets.UTF_8));
         fake.setExecutable(true);
+        java.io.File fakeSleep = new java.io.File(dir, "sleep");
+        java.nio.file.Files.write(fakeSleep.toPath(), ("#!/bin/sh\nprintf '[sleep][%s]\\n' \"$1\" >> '"
+                + log.getPath().replace('\\', '/') + "'\n").getBytes(StandardCharsets.UTF_8));
+        fakeSleep.setExecutable(true);
         // Windows mangles double quotes inside arguments on the way to sh (not an issue on Linux).
         boolean windows = System.getProperty("os.name", "").toLowerCase().contains("win");
         String text = windows ? "It's $HOME and `x`." : "It's \"quoted\" $HOME and `x`.";
         List<String> cmd = new SystemBackend("Linux", 0, 100, "", "", "").commands(Arrays.asList(
-                new VoiceParts.Part("narrator", text), new VoiceParts.Part("female", "-Hi."))).get(0);
+                new VoiceParts.Part("narrator", text), new VoiceParts.Part("female", "-Hi.", 250))).get(0);
         // The script goes in a file: Windows can't pass an argument full of quotes to sh intact.
         java.io.File script = new java.io.File(dir, "speak.sh");
         java.nio.file.Files.write(script.toPath(), cmd.get(2).getBytes(StandardCharsets.UTF_8));
@@ -155,7 +177,7 @@ public final class BackendTests {
         byte[] out = readAll(p.getInputStream());
         p.waitFor();
         String calls = log.exists() ? new String(java.nio.file.Files.readAllBytes(log.toPath()), StandardCharsets.UTF_8) : "";
-        T.eq("[-s][175][-a][200][--][" + text + "]\n[-s][175][-a][200][-v][en+f3][--][-Hi.]\n",
+        T.eq("[-s][175][-a][200][--][" + text + "]\n[sleep][0.250]\n[-s][175][-a][200][-v][en+f3][--][-Hi.]\n",
                 calls.replace("\r", ""), "calls (output: " + new String(out, StandardCharsets.UTF_8) + ")");
     }
 

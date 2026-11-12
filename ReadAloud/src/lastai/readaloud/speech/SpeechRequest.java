@@ -60,6 +60,7 @@ public final class SpeechRequest {
                 JSONObject j = new JSONObject();
                 j.put("text", p.text);
                 j.put("role", p.role);
+                if (p.pauseBefore > 0) j.put("pause", p.pauseBefore); // ms of silence first; older apps ignore it
                 arr.put(j);
             }
             o.put("parts", arr);

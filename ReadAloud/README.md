@@ -43,6 +43,14 @@ Settings "Who reads what" / `voiceMode`:
 | `quotes` (default) | everything outside quotation marks | text in "straight" or “curly” quotes |
 | `character` | everything when nobody is on the line | everything when a person is |
 | `single` | everything | nothing |
+| `speech` | nothing (only the choices, if those are read) | text in quotes |
+
+In `speech` mode, skipped narration between two quotes becomes a pause of
+`narrationPause` ms (default 500, setting "Pause for skipped narration"): one pause
+however much narration was skipped, none at the start or end, none between quotes with
+only whitespace between them. A part carries it as `pauseBefore`; the system voice
+waits with `Start-Sleep` (Windows) or `sleep` (macOS / Linux script), the companion
+gets it as the part's `pause` field.
 
 A quote spanning paragraphs (each one reopened, closed only at the end) stays with the
 character. The system voice speaks all parts in one process. "Automatic" voices: the

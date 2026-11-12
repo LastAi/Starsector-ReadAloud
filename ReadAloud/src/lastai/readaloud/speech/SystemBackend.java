@@ -144,7 +144,8 @@ public final class SystemBackend implements SpeechBackend {
         // The voice of each part ("" = the program's default).
         List<String> voices = new ArrayList<String>();
         for (VoiceParts.Part p : parts) voices.add(mac ? macVoice(p.role) : linuxVoice(p.role));
-        boolean oneVoice = new HashSet<String>(voices).size() == 1;
+        // Pauses need the per-part script, so text with pauses never takes the one-voice shortcut.
+        boolean oneVoice = new HashSet<String>(voices).size() == 1 && !hasPauses(parts);
         if (mac) {
             if (oneVoice) {
                 List<String> c = new ArrayList<String>(Arrays.asList("say", "-r", String.valueOf(wpm)));
@@ -201,10 +202,20 @@ public final class SystemBackend implements SpeechBackend {
             if (left <= 0) break;
             if (p.text.trim().isEmpty()) continue;
             String t = p.text.length() > left ? p.text.substring(0, left) : p.text;
-            out.add(new VoiceParts.Part(p.role, t));
+            out.add(p.withText(t));
             left -= t.length();
         }
         return out;
+    }
+
+    private static boolean hasPauses(List<VoiceParts.Part> parts) {
+        for (VoiceParts.Part p : parts) if (p.pauseBefore > 0) return true;
+        return false;
+    }
+
+    /** Milliseconds as seconds for sleep(1), e.g. 500 -> "0.5" (GNU, BSD/macOS and busybox take fractions). */
+    public static String seconds(int ms) {
+        return ms % 1000 == 0 ? String.valueOf(ms / 1000) : String.format(java.util.Locale.ROOT, "%.3f", ms / 1000.0);
     }
 
     private static String joined(List<VoiceParts.Part> parts) {
@@ -220,14 +231,16 @@ public final class SystemBackend implements SpeechBackend {
 
     /**
      * Arguments after the script: voice, text, voice, text... ("-" = the default voice; an
-     * empty argument is fragile). Each part runs in the background and is waited for, so
-     * stopping (SIGTERM to sh) can kill the one playing.
+     * empty argument is fragile). PAUSE_ARG then seconds is a silence instead. Each part runs
+     * in the background and is waited for, so stopping (SIGTERM to sh) can kill the one playing.
      */
     private static final String STOP_TRAP = "c=\ntrap 'if [ -n \"$c\" ]; then kill \"$c\" 2>/dev/null; fi; exit 143' TERM INT\n";
     static final String DEFAULT_VOICE_ARG = "-";
+    static final String PAUSE_ARG = "+pause";
     static final String MAC_SCRIPT = STOP_TRAP
             + "while [ \"$#\" -gt 1 ]; do\n"
-            + "  if [ \"$1\" != \"-\" ]; then say -r WPM -v \"$1\" -- \"$2\" &\n"
+            + "  if [ \"$1\" = \"+pause\" ]; then sleep \"$2\" &\n"
+            + "  elif [ \"$1\" != \"-\" ]; then say -r WPM -v \"$1\" -- \"$2\" &\n"
             + "  else say -r WPM -- \"$2\" &\n"
             + "  fi\n"
             + "  c=$!; wait \"$c\"; shift 2\n"
@@ -236,7 +249,8 @@ public final class SystemBackend implements SpeechBackend {
             + "E=\n"
             + "for p in espeak-ng espeak; do if command -v \"$p\" >/dev/null 2>&1; then E=$p; break; fi; done\n"
             + "while [ \"$#\" -gt 1 ]; do\n"
-            + "  if [ -z \"$E\" ]; then spd-say -w -r SPDRATE -i SPDVOL -- \"$2\" &\n"
+            + "  if [ \"$1\" = \"+pause\" ]; then sleep \"$2\" &\n"
+            + "  elif [ -z \"$E\" ]; then spd-say -w -r SPDRATE -i SPDVOL -- \"$2\" &\n"
             + "  elif [ \"$1\" != \"-\" ]; then \"$E\" -s WPM -a AMP -v \"$1\" -- \"$2\" &\n"
             + "  else \"$E\" -s WPM -a AMP -- \"$2\" &\n"
             + "  fi\n"
@@ -246,6 +260,10 @@ public final class SystemBackend implements SpeechBackend {
     private static List<String> shell(String script, List<VoiceParts.Part> parts, List<String> voices) {
         List<String> c = new ArrayList<String>(Arrays.asList("sh", "-c", script, "sh"));
         for (int i = 0; i < parts.size(); i++) {
+            if (parts.get(i).pauseBefore > 0) {
+                c.add(PAUSE_ARG);
+                c.add(seconds(parts.get(i).pauseBefore));
+            }
             c.add(voices.get(i).isEmpty() ? DEFAULT_VOICE_ARG : voices.get(i));
             c.add(parts.get(i).text);
         }
@@ -294,6 +312,7 @@ public final class SystemBackend implements SpeechBackend {
         sb.append("function Say($r,$b){$s.SelectVoice($v[$r]);$s.Speak([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b)))};");
         for (VoiceParts.Part p : parts) {
             String b64 = java.util.Base64.getEncoder().encodeToString(p.text.getBytes(Charset.forName("UTF-8")));
+            if (p.pauseBefore > 0) sb.append("Start-Sleep -Milliseconds ").append(p.pauseBefore).append(";");
             sb.append("Say '").append(p.role).append("' '").append(b64).append("';");
         }
         // After speaking, the speech engine can keep PowerShell alive for ~8 s more (and Dispose()

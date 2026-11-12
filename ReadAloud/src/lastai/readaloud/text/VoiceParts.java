@@ -19,20 +19,37 @@ public final class VoiceParts {
     public static final String MODE_CHARACTER = "character";
     /** One reader (the narrator) for everything. */
     public static final String MODE_SINGLE = "single";
+    /** Only quoted speech, in the character's voice; the narration is not read. */
+    public static final String MODE_SPEECH = "speech";
+
+    /** Every mode, for settings validation. */
+    public static final String[] MODES = {MODE_QUOTES, MODE_CHARACTER, MODE_SINGLE, MODE_SPEECH};
 
     /** A run of text for one voice. Paragraphs inside it are separated by a blank line. */
     public static final class Part {
         public final String role;
         public final String text;
+        /** Silence before this part, in milliseconds (0 = none). */
+        public final int pauseBefore;
 
         public Part(String role, String text) {
+            this(role, text, 0);
+        }
+
+        public Part(String role, String text, int pauseBefore) {
             this.role = role;
             this.text = text;
+            this.pauseBefore = Math.max(0, pauseBefore);
+        }
+
+        /** The same part with other text (the pause is kept). */
+        public Part withText(String t) {
+            return new Part(role, t, pauseBefore);
         }
 
         @Override
         public String toString() {
-            return role + ":" + text;
+            return (pauseBefore > 0 ? "(" + pauseBefore + "ms)" : "") + role + ":" + text;
         }
     }
 
@@ -49,11 +66,21 @@ public final class VoiceParts {
      * @param hasSpeaker true if a person is on the other end of the dialog
      */
     public static List<Part> split(List<String> paragraphs, String mode, String gender, boolean hasSpeaker) {
+        return split(paragraphs, mode, gender, hasSpeaker, 0);
+    }
+
+    /**
+     * @param pauseMs speech mode only: silence where narration between two quotes was skipped
+     *                (one pause however much narration; none at the start or end). 0 = no pause.
+     */
+    public static List<Part> split(List<String> paragraphs, String mode, String gender, boolean hasSpeaker, int pauseMs) {
         if (paragraphs == null || paragraphs.isEmpty()) return Collections.emptyList();
         String character = characterRole(gender);
         Builder b = new Builder();
+        b.skipNarrator = MODE_SPEECH.equals(mode);
+        b.pauseMs = Math.max(0, pauseMs);
         for (String p : paragraphs) {
-            if (MODE_QUOTES.equals(mode)) {
+            if (MODE_QUOTES.equals(mode) || b.skipNarrator) {
                 quotes(p, character, b);
             } else {
                 b.add(MODE_CHARACTER.equals(mode) && hasSpeaker ? character : NARRATOR, p);
@@ -88,13 +115,28 @@ public final class VoiceParts {
     private static final class Builder {
         final List<Part> parts = new ArrayList<Part>();
         private boolean newParagraph;
+        /** Drop narrator text (speech-only mode). */
+        boolean skipNarrator;
+        /** Silence in place of skipped narration. */
+        int pauseMs;
+        /** Narration was skipped since the last part. */
+        private boolean skipped;
 
         void add(String role, String raw) {
             String t = tidy(raw, NARRATOR.equals(role));
             if (t.isEmpty()) return;
+            if (skipNarrator && NARRATOR.equals(role)) {
+                skipped = !parts.isEmpty(); // nothing to pause after at the start
+                return;
+            }
             int n = parts.size();
-            if (n > 0 && parts.get(n - 1).role.equals(role)) {
-                parts.set(n - 1, new Part(role, parts.get(n - 1).text + (newParagraph ? "\n\n" : " ") + t));
+            boolean pause = skipped && pauseMs > 0;
+            skipped = false;
+            if (pause) {
+                parts.add(new Part(role, t, pauseMs));
+            } else if (n > 0 && parts.get(n - 1).role.equals(role)) {
+                Part last = parts.get(n - 1);
+                parts.set(n - 1, last.withText(last.text + (newParagraph ? "\n\n" : " ") + t));
             } else {
                 parts.add(new Part(role, t));
             }

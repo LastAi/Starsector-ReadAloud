@@ -3,7 +3,7 @@
   "name": "Read Aloud",
   "author": "LastAi",
   "utility": true,
-  "version": { "major": "0", "minor": "1", "patch": "1" },
+  "version": { "major": "0", "minor": "2", "patch": "0" },
   "description": "Adds a speaker button to dialogs (events, station contacts, encounters) that reads the latest text aloud. Uses your system voice out of the box: a narrator plus male and female character voices, optionally a voice pool so each character keeps their own voice. For AI voices (Kitten TTS, F5-TTS, Chatterbox), add the optional Read Aloud: AI Voices mod. Safe to add to or remove from a save.",
   "gameVersion": "0.98a-RC8",
   "jars": ["jars/ReadAloud.jar"],

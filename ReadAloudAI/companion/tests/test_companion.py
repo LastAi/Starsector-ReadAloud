@@ -271,10 +271,21 @@ class PartsTests(unittest.TestCase):
     def test_request_parts_are_validated(self):
         raw = [{'text': ' Hi ', 'role': 'female'}, {'text': 'x', 'role': 'bogus'}, 'junk', {'text': '  '}, {'role': 'male'},
                {'text': 5}]
-        self.assertEqual(server.request_parts(raw), [('Hi', 'female'), ('x', 'narrator')])
+        self.assertEqual(server.request_parts(raw), [('Hi', 'female', 0.0), ('x', 'narrator', 0.0)])
         self.assertEqual(server.request_parts(None), [])
         long = server.request_parts([{'text': 'a' * (server.MAX_TEXT - 1)}, {'text': 'bcd'}])
-        self.assertEqual(sum(len(t) for t, _ in long), server.MAX_TEXT, 'total capped')
+        self.assertEqual(sum(len(p[0]) for p in long), server.MAX_TEXT, 'total capped')
+
+    def test_pauses_are_read_and_bounded(self):
+        raw = [{'text': 'a', 'pause': 500}, {'text': 'b', 'pause': 999999}, {'text': 'c', 'pause': 'x'},
+               {'text': 'd', 'pause': -3}, {'text': 'e', 'pause': True}, {'text': 'f', 'pause': float('nan')}]
+        self.assertEqual([p[2] for p in server.request_parts(raw)], [0.5, server.MAX_PAUSE_MS / 1000.0, 0, 0, 0, 0])
+
+    def test_pause_goes_to_the_speaker(self):
+        app = self.fake_app()
+        server.App.speak(app, {'speaker': {'gender': 'male'}, 'parts': [
+            {'text': 'Hello Commander.', 'role': 'male'}, {'text': 'What can I do for you?', 'role': 'male', 'pause': 600}]})
+        self.assertEqual(app.speaker.parts, [('Hello Commander.', 'Bruno'), ('What can I do for you?', 'Bruno', 0.6)])
 
     class FakeSpeaker:
         last_error = ''
@@ -340,6 +351,41 @@ class PartsTests(unittest.TestCase):
         self.assertTrue(all(v == 'Jasper' for _, v in synth[:-1]), synth)
         self.assertGreater(len(synth), 2, 'the long narrator part was chunked')
         self.assertEqual(len(played), len(synth))
+
+    def test_pause_is_silence_between_parts(self):
+        events = []
+
+        class Engine:
+            def synth(self, text, voice, out):
+                audio.tone(out, seconds=0.02)
+
+        class Player:
+            backend = 'fake'
+
+            def play(self, path):
+                events.append(('play', time.time()))
+                return True
+
+            def stop(self):
+                pass
+
+        app = type('FakeApp', (), {})()
+        app.engine, app.player, app.log = Engine(), Player(), lambda m: None
+        app.paths = type('P', (), {'tmp': scratch('pause-tmp')})()
+        app.settings = type('S', (), {'data': {'volume': 100}})()
+        sp = server.Speaker(app)
+        # A pause on the first part is ignored: there is nothing to pause after.
+        sp.speak_parts([('One.', 'Jasper', 0.4), ('Two.', 'Jasper', 0.4)])
+        wait_for(lambda: not sp.speaking and len(events) == 2, what='both parts played')
+        self.assertGreaterEqual(events[1][1] - events[0][1], 0.35, 'silence before the second part')
+
+        events.clear()
+        sp.speak_parts([('One.', 'Jasper'), ('Two.', 'Jasper', 3.0)])
+        wait_for(lambda: len(events) == 1, what='first part played')
+        sp.stop()
+        time.sleep(0.2)
+        self.assertFalse(sp.speaking, 'stop cuts the pause short')
+        self.assertEqual(len(events), 1)
 
 
 class MovedRuntimeTests(unittest.TestCase):

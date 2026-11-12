@@ -113,12 +113,13 @@ public final class SpeakerButton implements CustomUIPanelPlugin {
      */
     public static List<VoiceParts.Part> buildParts(List<String> paragraphs, List<String> choices, Config cfg,
                                                    String gender, boolean hasSpeaker) {
-        List<VoiceParts.Part> raw = new ArrayList<VoiceParts.Part>(VoiceParts.split(paragraphs, cfg.voiceMode, gender, hasSpeaker));
+        List<VoiceParts.Part> raw = new ArrayList<VoiceParts.Part>(
+                VoiceParts.split(paragraphs, cfg.voiceMode, gender, hasSpeaker, cfg.narrationPause));
         for (String c : choices) raw.add(new VoiceParts.Part(VoiceParts.NARRATOR, c));
         List<VoiceParts.Part> out = new ArrayList<VoiceParts.Part>();
         for (VoiceParts.Part p : raw) {
             String t = TextCleaner.replace(p.text, cfg.replacements).trim();
-            if (!t.isEmpty()) out.add(new VoiceParts.Part(p.role, t));
+            if (!t.isEmpty()) out.add(p.withText(t));
         }
         return out;
     }

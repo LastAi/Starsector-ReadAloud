@@ -60,8 +60,11 @@ public final class Config {
     /** Pool voices by name; empty = every usable installed voice of that gender. */
     public List<String> systemPoolMale = Collections.emptyList();
     public List<String> systemPoolFemale = Collections.emptyList();
-    /** Who reads what: VoiceParts.MODE_QUOTES, MODE_CHARACTER or MODE_SINGLE. */
+    /** Who reads what: VoiceParts.MODE_QUOTES, MODE_CHARACTER, MODE_SINGLE or MODE_SPEECH. */
     public String voiceMode = VoiceParts.MODE_QUOTES;
+    /** Speech mode: milliseconds of silence where narration between quotes is skipped (0 = none). */
+    public int narrationPause = 500;
+    public static final int MAX_NARRATION_PAUSE = 3000;
     /** Samples played when settings are saved: PREVIEW_CHANGED, PREVIEW_ALL or PREVIEW_OFF. */
     public String voicePreview = PREVIEW_CHANGED;
     public List<Replacement> replacements = Collections.emptyList();
@@ -124,8 +127,8 @@ public final class Config {
         c.systemVoicePools = json.optBoolean("systemVoicePools", c.systemVoicePools);
         c.systemPoolMale = names(json.optJSONArray("systemPoolMale"));
         c.systemPoolFemale = names(json.optJSONArray("systemPoolFemale"));
-        c.voiceMode = oneOf(json.optString("voiceMode", c.voiceMode), c.voiceMode, "voiceMode",
-                VoiceParts.MODE_QUOTES, VoiceParts.MODE_CHARACTER, VoiceParts.MODE_SINGLE);
+        c.voiceMode = oneOf(json.optString("voiceMode", c.voiceMode), c.voiceMode, "voiceMode", VoiceParts.MODES);
+        c.narrationPause = clampInt(json, "narrationPause", c.narrationPause, 0, MAX_NARRATION_PAUSE);
         c.voicePreview = oneOf(json.optString("voicePreview", c.voicePreview), c.voicePreview, "voicePreview",
                 PREVIEW_CHANGED, PREVIEW_ALL, PREVIEW_OFF);
         c.replacements = parseReplacements(json.optJSONArray("replacements"));
@@ -174,9 +177,9 @@ public final class Config {
         if ((i = o.getInt("readaloud_hotkey")) != null && i >= 0) hotkey = i;
         if ((i = o.getInt("readaloud_systemRate")) != null) systemRate = Math.max(-10, Math.min(10, i));
         if ((i = o.getInt("readaloud_systemVolume")) != null) systemVolume = Math.max(0, Math.min(100, i));
+        if ((i = o.getInt("readaloud_narrationPause")) != null) narrationPause = Math.max(0, Math.min(MAX_NARRATION_PAUSE, i));
         s = o.getString("readaloud_voiceMode");
-        if (s != null) voiceMode = oneOf(s, voiceMode, "readaloud_voiceMode",
-                VoiceParts.MODE_QUOTES, VoiceParts.MODE_CHARACTER, VoiceParts.MODE_SINGLE);
+        if (s != null) voiceMode = oneOf(s, voiceMode, "readaloud_voiceMode", VoiceParts.MODES);
         s = o.getString("readaloud_voicePreview");
         if (s != null) voicePreview = oneOf(s, voicePreview, "readaloud_voicePreview", PREVIEW_CHANGED, PREVIEW_ALL, PREVIEW_OFF);
         // The voice menus exist only when the voice list could be read; without them (null) the file's value stays.
