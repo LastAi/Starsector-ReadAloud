@@ -4,6 +4,8 @@ import lastai.readaloud.Config;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Turns dialog paragraphs into speakable text. Pure: no game classes, so it is unit tested. */
 public final class TextCleaner {
@@ -20,10 +22,31 @@ public final class TextCleaner {
             else if (c == '•' || c == '●') sb.append(' '); // bullets
             else sb.append(c);
         }
-        String s = sb.toString().replaceAll(" {2,}", " ").trim();
+        String s = credits(sb.toString()).replaceAll(" {2,}", " ").trim();
         // A paragraph made only of punctuation or symbols (dividers, "...") isn't worth speaking.
         for (int i = 0; i < s.length(); i++) if (Character.isLetterOrDigit(s.charAt(i))) return s;
         return "";
+    }
+
+    /** Starsector's credit symbol (Strings.C in the API). Voices read it as "cents". */
+    private static final char CREDIT = '¢';
+    /** "1,000¢" / "1,000 ¢" (the game's Misc.getDGSCredits form) and "¢1,000" (some mods). */
+    private static final Pattern AMOUNT = Pattern.compile(
+            "(\\d(?:[\\d,.]*\\d)?) ?¢|¢ ?(\\d(?:[\\d,.]*\\d)?)");
+    /** A symbol right after a word or number that isn't a plain amount, e.g. "10k¢". */
+    private static final Pattern GLUED = Pattern.compile("(?<=[\\p{L}\\p{N}])¢");
+
+    /** Speaks the credit symbol as "credits" ("1,000¢" -> "1,000 credits", "1¢" -> "1 credit"). */
+    static String credits(String s) {
+        if (s.indexOf(CREDIT) < 0) return s;
+        Matcher m = AMOUNT.matcher(s);
+        StringBuffer sb = new StringBuffer(s.length() + 16);
+        while (m.find()) {
+            String n = m.group(1) != null ? m.group(1) : m.group(2);
+            m.appendReplacement(sb, Matcher.quoteReplacement(n + ("1".equals(n) ? " credit" : " credits")));
+        }
+        m.appendTail(sb);
+        return GLUED.matcher(sb.toString()).replaceAll(" credits").replace(String.valueOf(CREDIT), "credits");
     }
 
     /** An option label for speaking: without its "1. " number and "[Esc]"-style key hints. */

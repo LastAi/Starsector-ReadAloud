@@ -20,6 +20,23 @@ public final class TextTests {
         T.eq("Cost: 500", TextCleaner.clean("• Cost: 500"), "bullet");
     }
 
+    public static void creditSymbolIsSpokenAsCredits() {
+        // The game's own form: Misc.getDGSCredits / getWithDGS(n) + Strings.C ("¢").
+        T.eq("You have 1,234,567 credits available.",
+                TextCleaner.clean("You have 1,234,567¢ available."), "grouped amount");
+        T.eq("Bounty: 0 credits", TextCleaner.clean("Bounty: 0¢"), "zero");
+        T.eq("Costs 1 credit.", TextCleaner.clean("Costs 1¢."), "singular");
+        T.eq("Pay ~1,000 credits.", TextCleaner.clean("Pay ~1,000¢."), "approximate");
+        // Forms mods may use.
+        T.eq("Pay 500 credits now", TextCleaner.clean("Pay 500 ¢ now"), "spaced");
+        T.eq("Pay 500 credits.", TextCleaner.clean("Pay ¢500."), "symbol first");
+        T.eq("Earn 10k credits", TextCleaner.clean("Earn 10k¢"), "suffix");
+        T.eq("Payment in credits", TextCleaner.clean("Payment in ¢"), "lone symbol");
+        T.eq("Accept (12,000 credits)", TextCleaner.option("2. Accept (12,000¢) [A]"), "in an option");
+        // Text without the symbol is untouched.
+        T.eq("1,000 cents and 5 credits.", TextCleaner.clean("1,000 cents and 5 credits."), "no symbol");
+    }
+
     public static void joinAddsPausesBetweenParagraphs() {
         String s = TextCleaner.join(Arrays.asList("The station looms", "", "\"Welcome,\" she says."), null);
         T.eq("The station looms.\n\n\"Welcome,\" she says.", s, "joined");
